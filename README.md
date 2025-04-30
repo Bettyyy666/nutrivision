@@ -6,4 +6,4 @@ conda create --name foodseg python=3.7.16
 pip install -r requirements.txt
 
 ## Poster
-![Example Image](1470 Poster.jpg)
+![Poster](1470%20Poster.jpg)
