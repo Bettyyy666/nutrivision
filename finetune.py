@@ -24,9 +24,13 @@ class FoodSeg103Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.imgs[idx])
         mask_path = os.path.join(self.mask_dir, self.masks[idx])
-
+        
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)
+        # Resize both image and mask to 192x256 BEFORE any further processing
+        resize_size = (256, 192)  # (width, height) as required by PIL
+        img = img.resize(resize_size, resample=Image.BILINEAR)
+        mask = mask.resize(resize_size, resample=Image.NEAREST)  # preserve label values
 
         mask = np.array(mask)
         obj_ids = np.unique(mask)
@@ -97,7 +101,7 @@ def get_model_instance_segmentation(num_classes):
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    hidden_layer = 256
+    hidden_layer = 512
     model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
 
     return model
@@ -194,8 +198,8 @@ def main():
     dataset = FoodSeg103Dataset(dataset_root, subset="train", transforms=get_transform())
     dataset_test = FoodSeg103Dataset(dataset_root, subset="test", transforms=get_transform())
 
-    data_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=4, collate_fn=collate_fn)
-    data_loader_test = DataLoader(dataset_test, batch_size=2, shuffle=False, num_workers=4, collate_fn=collate_fn)
+    data_loader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn)
+    data_loader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, num_workers=4, collate_fn=collate_fn)
 
     print("[INFO] DataLoader created: ", len(data_loader))
 
@@ -216,7 +220,7 @@ def main():
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
 
-    num_epochs = 10
+    num_epochs = 3
 
     for epoch in range(start_epoch, num_epochs):
         print(f"\n[INFO] Starting epoch {epoch+1}/{num_epochs}...")
@@ -235,6 +239,7 @@ def main():
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
+            torch.cuda.empty_cache()
 
             progress_bar.set_postfix(loss=losses.item())
 
