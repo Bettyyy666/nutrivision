@@ -7,6 +7,7 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import torchvision.transforms as T
 from PIL import Image
+from diffusers import StableDiffusionInpaintPipeline
 
 # -------- CONFIG --------
 MODEL_PATH = "mrcnn_foodseg103.pth"
@@ -105,6 +106,28 @@ def run_inference(image_path):
     output_path = os.path.join(OUTPUT_DIR, f"{name}_masked.jpg")
     cv2.imwrite(output_path, cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
     print(f"[INFO] Saved result image to {output_path}")
+
+    # food subsitution
+    merged_mask = np.any(masks, axis=0).astype(np.uint8)
+    user_prompt = "scrambled egg"
+    inpainted_output_path = os.path.join(OUTPUT_DIR, f"{name}_inpainted.jpg")
+    run_inpainting(orig, merged_mask, user_prompt, inpainted_output_path)
+
+# -------- INPAINTING FUNCTION --------
+def run_inpainting(original_img, binary_mask, prompt, output_path="output/inpainted_result.png"):
+    # Convert np array to PIL images
+    image_pil = Image.fromarray(original_img.astype(np.uint8)).convert("RGB")
+    mask_pil = Image.fromarray((binary_mask * 255).astype(np.uint8)).convert("L")
+
+    # Load the inpainting model (assumes it's downloaded)
+    pipe = StableDiffusionInpaintPipeline.from_pretrained(
+        "Lykon/dreamshaper-8-inpainting", torch_dtype=torch.float16
+    ).to(DEVICE)
+
+    # Run the model
+    result = pipe(prompt=prompt, image=image_pil, mask_image=mask_pil).images[0]
+    result.save(output_path)
+    print(f"[INFO] Inpainting result saved to {output_path}")
 
 if __name__ == "__main__":
     run_inference(INPUT_IMAGE)
