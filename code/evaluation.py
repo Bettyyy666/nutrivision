@@ -195,66 +195,22 @@ def main():
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(f"[INFO] Using device: {device}")
 
-    dataset = FoodSeg103Dataset(dataset_root, subset="train", transforms=get_transform())
+    # dataset = FoodSeg103Dataset(dataset_root, subset="train", transforms=get_transform())
     dataset_test = FoodSeg103Dataset(dataset_root, subset="test", transforms=get_transform())
 
-    data_loader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn)
+    # data_loader = DataLoader(dataset, batch_size=8, shuffle=True, num_workers=4, collate_fn=collate_fn)
     data_loader_test = DataLoader(dataset_test, batch_size=8, shuffle=False, num_workers=4, collate_fn=collate_fn)
 
-    print("[INFO] DataLoader created: ", len(data_loader))
+    print("[INFO] DataLoader_test created: ", len(data_loader_test))
 
     model = get_model_instance_segmentation(num_classes)
     model.to(device)
 
-    start_epoch = 0
-
-    # --------- Load Checkpoint ----------
-    if os.path.exists(CHECKPOINT_PATH):
-        print(f"[INFO] Loading checkpoint from {CHECKPOINT_PATH}...")
-        model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
-        print("[INFO] Loaded checkpoint successfully!")
-    else:
-        print(f"[INFO] No checkpoint found at {CHECKPOINT_PATH}. Starting fresh training...")
-
-    params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
-
-    num_epochs = 3
-
-    for epoch in range(start_epoch, num_epochs):
-        print(f"\n[INFO] Starting epoch {epoch+1}/{num_epochs}...")
-        model.train()
-        epoch_loss = 0
-        progress_bar = tqdm(data_loader, desc=f"[Training] Epoch {epoch+1}")
-
-        for batch_idx, (images, targets) in enumerate(progress_bar):
-            images = list(img.to(device) for img in images)
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
-            loss_dict = model(images, targets)
-            losses = sum(loss for loss in loss_dict.values())
-            epoch_loss += losses.item()
-
-            optimizer.zero_grad()
-            losses.backward()
-            optimizer.step()
-            torch.cuda.empty_cache()
-
-            progress_bar.set_postfix(loss=losses.item())
-
-        lr_scheduler.step()
-        print(f"[INFO] Training Loss after Epoch {epoch+1}: {epoch_loss:.4f}")
-
-        # --------- Evaluation ----------
-        mean_aps, mean_iou = evaluate(model, data_loader_test, device)
-        print(f"[INFO] Evaluation Results after Epoch {epoch+1}:")
-        print(f" - Mean IoU: {mean_iou:.4f}")
-        for iou_thresh, ap in mean_aps.items():
-            print(f" - mAP@{iou_thresh:.2f}: {ap:.4f}")
-        # --------- Save Checkpoint ----------
-        torch.save(model.state_dict(), CHECKPOINT_PATH)
-        print(f"[INFO] Checkpoint saved at {CHECKPOINT_PATH}")
+    mean_aps, mean_iou = evaluate(model, data_loader_test, device)
+    print(f"[INFO] Evaluation Results:")
+    print(f" - Mean IoU: {mean_iou:.4f}")
+    for iou_thresh, ap in mean_aps.items():
+        print(f" - mAP@{iou_thresh:.2f}: {ap:.4f}")
 
 if __name__ == "__main__":
     main()
